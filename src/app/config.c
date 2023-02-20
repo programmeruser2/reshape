@@ -1,5 +1,6 @@
 #include <string.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 char** get_modules(char* config) {
 	char** modules = NULL;
@@ -13,7 +14,7 @@ char** get_modules(char* config) {
 		last = token;
 		++ntokens;
 
-		newmodules = realloc(modules, ntokens * sizeof(char*));
+		char** newmodules = realloc(modules, ntokens * sizeof(char*));
 		if (newmodules == NULL) {
 			perror("realloc failed");
 			exit(1);

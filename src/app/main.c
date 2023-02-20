@@ -38,7 +38,7 @@ int main(int argc, char* argv[]) {
 					// Read in conversion types.
 					// If there are multiple, then the output of one is piped into the next
 					++ntypes;
-					newtypes = (char**) realloc(types, ntypes * sizeof(char*));
+					char** newtypes = (char**) realloc(types, ntypes * sizeof(char*));
 					if (newtypes == NULL) {
 						perror("realloc types failed");
 						free(types);
@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
 					break;
 				case 'o':
 					++noutputs;
-					newoutputs = (FILE**) realloc(outputs, noutputs * sizeof(FILE*));
+					FILE** newoutputs = (FILE**) realloc(outputs, noutputs * sizeof(FILE*));
 					if (newoutputs == NULL) {
 						perror("realloc outputs failed");
 						free(outputs);
@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
 		} else {
 			// process input
 			++ninputs;
-			newinputs = (FILE**) realloc(outputs, noutputs * sizeof(FILE*));
+			FILE** newinputs = (FILE**) realloc(outputs, noutputs * sizeof(FILE*));
 			if (newinputs == NULL) {
 				perror("realloc inputs failed");
 				free(inputs);
@@ -86,7 +86,7 @@ int main(int argc, char* argv[]) {
 	}
 	// Handle required inputs
 	if (ntypes == 0) {
-		fprintf(stderr, "no conversion types specified\n");
+		fprintf(stderr, "error: no conversion types specified\n");
 		return 1;
 	}
 	if (noutputs == 0) {
@@ -105,7 +105,7 @@ int main(int argc, char* argv[]) {
 	// Conversion
 
 	// Close all fil
-	for (size_t i = 0; i < noutputs ++i) {
+	for (size_t i = 0; i < noutputs; ++i) {
 		fclose(outputs[i]);
 	}
 	for (size_t i = 0; i < ninputs; ++i) {
@@ -114,9 +114,7 @@ int main(int argc, char* argv[]) {
 	fclose(configfile);
 
 	// Free memory
-	for (size_t i = 0; i < ntypes; ++i) {
-		free(types[i]);
-	}
+	
 	free(types);
 	free(inputs);
 	free(outputs);

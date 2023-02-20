@@ -22,7 +22,7 @@ char* read_all(FILE* file) {
 		}
 		buf[0] = '\0';
 		char c;
-		while ((c = getchar() != EOF) {
+		while ((c = getchar()) != EOF) {
 			++size;
 			char* newbuf = (char*) realloc(buf, size*(sizeof(char)));
 			if (newbuf == NULL) {
