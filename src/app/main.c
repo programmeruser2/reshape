@@ -6,9 +6,15 @@ int main(int argc, char* argv[]) {
 	while ((c = getopt(argc, argv, "ht:")) != -1) {
 		switch (c) {
 			case 'h':
-				printf("Usage: %s [-t type1 type2 type3...]\n", argv[0]);
-				break;
+				printf("Usage: %s -t type1 [-t type2...] [-i input1] [-i input2...] [-o output1] [-o output2...]\n"
+							"-h			Show this help message\n"
+							"-i input			specify an input file (input files that appear earlier in the arguments are earlier in the list of inputs\n"
+							"-o output			specify an output file (output files that appear earlier in the arguments are earlier in the list of outputs)\n", argv[0]);
+				return 0;
 			case 't':
+				// Read in conversion types.
+				// If there are multiple, then the output of one is piped into the next.
+
 				break;
 			case '?':
 				// fprintf(stderr, "Unknown option -%c", optopt);
