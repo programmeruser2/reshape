@@ -53,3 +53,5 @@ dkms.conf
 
 # Don't push compiled binaries.
 bin/
+# Exclude swap files
+*.swp
