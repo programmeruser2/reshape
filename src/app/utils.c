@@ -13,6 +13,7 @@ FILE* fopen_with_error(char* path, char* mode) {
 }
 char* read_all(FILE* file) {
 	// TODO: maybe check more file types?
+	// TODO: handle null bytes correctly
 	if (file == stdin) {
 		char* buf = (char*) malloc(sizeof(char));
 		size_t size = 1;
