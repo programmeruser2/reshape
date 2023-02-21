@@ -1,6 +1,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <errno.h>
+// TODO: use something other than errno for errors
 
 char** get_modules(char* config) {
 	char** modules = NULL;
@@ -16,8 +18,7 @@ char** get_modules(char* config) {
 
 		char** newmodules = realloc(modules, ntokens * sizeof(char*));
 		if (newmodules == NULL) {
-			perror("realloc failed");
-			exit(1);
+			return NULL; 
 		} else {
 			modules = newmodules;
 			modules[ntokens-1] = token;
@@ -25,8 +26,8 @@ char** get_modules(char* config) {
 		token = strtok(config, delims);
 	}
 	if (ntokens % 2 != 0) {
-		fprintf(stderr, "Missing shared library path for module %s\n", last);
-		exit(1);
+		errno = ELIBACC;
+		return NULL;
 	}
 	return modules;	
 }
