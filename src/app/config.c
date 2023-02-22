@@ -8,6 +8,7 @@ char** get_modules(char* config) {
 	char** modules = NULL;
 	// array of strings
 	// {"mymodule", "/path/to/mymodule.so", ...}
+	// TODO: use hash table O(1) instead of O(n) lookup array
 	const char* delims = " \n\t";
 	char* last = "";
 	char* token = strtok(config, delims);
