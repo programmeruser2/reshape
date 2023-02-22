@@ -18,6 +18,7 @@ char** get_modules(char* config) {
 
 		char** newmodules = realloc(modules, ntokens * sizeof(char*));
 		if (newmodules == NULL) {
+			free(modules);
 			return NULL; 
 		} else {
 			modules = newmodules;
@@ -27,6 +28,7 @@ char** get_modules(char* config) {
 	}
 	if (ntokens % 2 != 0) {
 		errno = ELIBACC;
+		free(modules);
 		return NULL;
 	}
 	return modules;	

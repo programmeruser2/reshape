@@ -33,6 +33,7 @@ char* read_all(FILE* file) {
 		rewind(file);
 		char* buf = malloc(size+1);
 		if (fread(buf, size, 1, file) < size) {
+			free(buf);
 			return NULL;
 		}
 		return buf;

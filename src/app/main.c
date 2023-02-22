@@ -19,6 +19,8 @@ struct optionslist {
 	size_t noutputs;
 
 	FILE* configfile;
+
+	char** modules;
 };
 
 struct optionslist* create_optionslist(void) {
@@ -156,6 +158,18 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 	// Read and parse
+	char* config = read_all(options->configfile);
+	if (config == NULL) {
+		perror("failed to read configuration file");
+		destroy_optionslist(options);
+		return 1;
+	}
+	options->modules = get_modules(config);
+	if (options->modules == NULL) {
+		perror("failed to parse configuration file");
+		destroy_optionslist(options);
+		return 1;
+	}
 
 	// Conversion
 
