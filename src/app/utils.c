@@ -11,8 +11,8 @@ char* read_all(FILE* file) {
 			return NULL;
 		}
 		buf[0] = '\0';
-		char c;
-		while ((c = getchar()) != EOF) {
+		int c;
+		while ((unsigned int) (c = getchar()) != (unsigned int) EOF) {
 			++size;
 			char* newbuf = (char*) realloc(buf, size*(sizeof(char)));
 			if (newbuf == NULL) {
@@ -21,7 +21,7 @@ char* read_all(FILE* file) {
 			} else {
 				buf = newbuf;
 				buf[size-1] = '\0';
-				buf[size-2] = c;
+				buf[size-2] = (char) c;
 			}
 		}
 		return buf;
@@ -29,13 +29,14 @@ char* read_all(FILE* file) {
 		if ((fseek(file, 0, SEEK_END)) < 0) {
 			return NULL;
 		}
-		size_t size = ftell(file);
+		size_t size = (size_t) ftell(file);
 		rewind(file);
 		char* buf = malloc(size+1);
 		if (fread(buf, size, 1, file) < size) {
 			free(buf);
 			return NULL;
 		}
+		buf[size] = '\0';
 		return buf;
 	}
 }

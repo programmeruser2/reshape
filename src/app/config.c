@@ -5,19 +5,20 @@
 // TODO: use something other than errno for errors
 
 char** get_modules(char* config) {
-	char** modules = NULL;
+	char** modules = malloc(1 * sizeof(char*));
+	if (modules == NULL) {
+		return NULL;
+	}
+	modules[0] = NULL;
 	// array of strings
 	// {"mymodule", "/path/to/mymodule.so", ...}
 	// TODO: use hash table O(1) instead of O(n) lookup array
 	const char* delims = " \n\t";
-	char* last = "";
 	char* token = strtok(config, delims);
 	size_t ntokens = 0;
 	while (token != NULL) {
-		last = token;
 		++ntokens;
-
-		char** newmodules = realloc(modules, ntokens * sizeof(char*));
+		char** newmodules = realloc(modules, (ntokens + 1) * sizeof(char*));
 		if (newmodules == NULL) {
 			free(modules);
 			return NULL; 

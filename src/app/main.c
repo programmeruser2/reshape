@@ -2,10 +2,15 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stddef.h>
+#include <stdbool.h>
+#include <dlfcn.h>
+#include <string.h>
+#include <errno.h>
+
+// TODO: be consistent with perror/strerror
+
 #include "utils.h"
 #include "config.h"
-
-// TODO: better memory exit handler
 
 // optionslist
 struct optionslist {
@@ -13,14 +18,16 @@ struct optionslist {
 	size_t ntypes;
 
 	FILE** inputs;
+	char** inputbufs;
 	size_t ninputs;
 
 	FILE** outputs;
 	size_t noutputs;
 
 	FILE* configfile;
-
+	
 	char** modules;
+	void** modulehandles;
 };
 
 struct optionslist* create_optionslist(void) {
@@ -30,6 +37,7 @@ struct optionslist* create_optionslist(void) {
 	options->ntypes = 0;
 
 	options->inputs = NULL;
+	options->inputbufs = NULL;
 	options->ninputs = 0;
 
 	options->outputs = NULL;
@@ -37,19 +45,33 @@ struct optionslist* create_optionslist(void) {
 
 	options->configfile = NULL;
 
+	options->modules = NULL;
+	options->modulehandles = NULL;
+
 	return options;
 }
 void destroy_optionslist(struct optionslist* options) {
 	// types should point to argv, so no need to dealloc individual pointer
 	free(options->types);
+	free(options->modules);
 	// close all files
 	for (size_t i = 0; i < (options->ninputs); ++i) {
-		if (options->inputs[i] != NULL) fclose(options->inputs[i]);
+		if (options->inputs != NULL && options->inputs[i] != NULL) fclose(options->inputs[i]);
+		if (options->inputbufs != NULL && options->inputbufs[i] != NULL) free(options->inputbufs[i]);
 	}
 	for (size_t i = 0; i < (options->noutputs); ++i) {
-		if (options->outputs[i] != NULL) fclose(options->outputs[i]);
+		if (options->outputs != NULL && options->outputs[i] != NULL) fclose(options->outputs[i]);
+	}
+	for (size_t i = 0; i < (options->ntypes); ++i) {
+		if (options->modulehandles != NULL && options->modulehandles[i] != NULL) dlclose(options->modulehandles[i]);
 	}
 	if (options->configfile != NULL) fclose(options->configfile);
+	// free individual arrays
+	free(options->inputs);
+	free(options->inputbufs);
+	free(options->outputs);
+	free(options->modules);
+	free(options->modulehandles);
 	// finally, free the entire struct
 	free(options);
 }
@@ -141,13 +163,16 @@ int main(int argc, char* argv[]) {
 		destroy_optionslist(options);
 		return 1;
 	}
+	// TODO: util for specifying # of inputs/outputs for a module
 	if (options->noutputs == 0) {
 		options->noutputs = 1;
+		options->outputs = malloc(sizeof(FILE*));
 		options->outputs[0] = stdout; // stdout
 	}
 
 	if (options->ninputs == 0) {
 		options->ninputs = 1;
+		options->inputs = malloc(sizeof(FILE*));
 		options->inputs[0] = stdin;
 	}
 	// Open config file
@@ -157,7 +182,8 @@ int main(int argc, char* argv[]) {
 		destroy_optionslist(options);
 		return 1;
 	}
-	// Read and parse
+	// Read and parse config
+	// TODO: allow config file specfication in enviroment variables
 	char* config = read_all(options->configfile);
 	if (config == NULL) {
 		perror("failed to read configuration file");
@@ -165,13 +191,122 @@ int main(int argc, char* argv[]) {
 		return 1;
 	}
 	options->modules = get_modules(config);
+	// no need for config now
+	free(config);
 	if (options->modules == NULL) {
 		perror("failed to parse configuration file");
 		destroy_optionslist(options);
 		return 1;
 	}
 
+	//  Read all input files
+	for (size_t i = 0; i < options->ninputs; ++i) {
+		options->inputbufs[i] = read_all(options->inputs[i]);
+		if (options->inputbufs[i] == NULL) {
+			// TODO: way to get file path from FILE pointer?
+			perror("failed to read input file");
+			destroy_optionslist(options);
+			return 1;
+		}
+	}
+
 	// Conversion
+	// Allocate space for module handles
+	options->modulehandles = malloc((options->ntypes) * sizeof(void*));
+	if (options->modulehandles == NULL) {
+		perror("Failed to allocate space for shared library handles for modules");
+		destroy_optionslist(options);
+		return 1;
+	}
+	// First, find the modules we need
+	// Loop through inputted types
+	for (size_t i = 0; i < options->ntypes; ++i) {
+		// Search for library path in options->modules
+		// TODO: handle symbol conflicts better
+		// TODO: see https://stackoverflow.com/questions/22004131/is-there-symbol-conflict-when-loading-two-shared-libraries-with-a-same-symbol
+		size_t j = 0;
+		bool found = false;
+		while (options->modules[j] != NULL) {
+			if (options->modules[j] == options->types[i]) {
+				options->modulehandles[i] = dlopen(options->modules[j+1], RTLD_LAZY | RTLD_DEEPBIND);
+				// RTLD_LAZY: we don't want to load more functions than needed
+				// RTLD_DEEPBIND: make sure that we are actually loading the conversion function from the library,
+				// and not some other library with a global symbol
+				if (options->modulehandles[i] == NULL) {
+					printf("Failed to load shared library %s for module %s: %s", options->modules[j+1], options->modules[j], dlerror());
+					destroy_optionslist(options);
+					return 1;
+				} else {
+					found = true;
+					break;
+				}
+			}
+			j += 2;
+		}
+		if (!found) {
+			fprintf(
+				stderr, 
+				"Could not find shared library path for module %s in configuration file %s\n", 
+				options->types[i], 
+				configpath
+			);
+			destroy_optionslist(options);
+			return 1;
+		}
+	}
+	
+	// Now, start conversion!
+	// Go through every type
+	// Earlier types -> earlier in piping/composition
+	char** current_args = options->inputbufs;
+	size_t current_nargs = options->ninputs;
+	// TODO: for stdin/stdout defaults, maybe "pad" with more stdin/stdout to make everything go to stdin/stdout?
+	for (size_t i = 0; i < options->ntypes; ++i) {
+		// Get reference of function
+		// Function prototype
+		char** (*module_convert) (size_t, char**, char**);
+		// Inputs are passed through to be char**.
+		// Since va_list is not supported in many languages and unsafe, a char** is used;
+		// # of inputs are provided as a size_t
+		// Full prototype: char** module_convert(size_t nargs, char** args, char** error);
+		// error is a pointer to a error string. Printed if it is not equal to NULL and length > 0. 
+		// The module SHOULD NOT assume anything about the error string.
+
+		// this trick is necessary to prevent compiler errors/warnings about function pointers and void*
+		*(void**) (&module_convert) = dlsym(options->modulehandles[i], "module_convert");
+		char* error = NULL;
+		char** output = module_convert(current_nargs, current_args, &error);
+		// Check error
+		if (error != NULL && strlen(error) > 0) {
+			fprintf(stderr, "Error during conversion in module %s: %s\n", options->types[i], error);
+			destroy_optionslist(options);
+			return 1;
+		}
+		
+		// Free previous memory
+		// It's assumed that the strings are heap allocated. If it isn't the module can just malloc and then strcpy there.
+		// The list should be terminated by a NULL.
+		for (size_t j = 0; j < current_nargs; ++j) {
+			free(current_args[i]);		
+		}
+		free(current_args);
+		// Set new values
+		current_args = output;
+		current_nargs = 0;
+		while (current_args[current_nargs] != NULL) ++current_nargs;
+	}
+	// Finally, write output to files
+	for (size_t i = 0; i < current_nargs; ++i) {
+		if (i < options->noutputs) {
+			char* buf = current_args[i];
+			size_t len = strlen(buf);
+			fwrite(buf, len, 1, options->outputs[i]);
+		} else {
+			break;
+		}
+	}
+
+	// We are done!
 
 	// Cleanup
 	destroy_optionslist(options);
