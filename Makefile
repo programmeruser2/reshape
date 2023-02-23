@@ -2,7 +2,7 @@ modules :=
 module_libraries := $(addsuffix .so,$(modules))
 
 CC := gcc
-CFLAGS := -Wall -Wextra -Wpedantic -Werror -Wshadow -Wformat=2 -Wconversion -Wunused-parameter -fsanitize=address,undefined
+CFLAGS := -Wall -Wextra -Wpedantic -Werror -Wshadow -Wformat=2 -Wconversion -Wunused-parameter -fsanitize=address,undefined -g
 LDFLAGS := -ldl
 
 # TODO: debug target because it's probably not a good idea to have address sanitizer on in production/release

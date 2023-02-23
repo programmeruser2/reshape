@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <errno.h>
 
 char* read_all(FILE* file) {
 	// TODO: maybe check more file types?
@@ -32,8 +33,18 @@ char* read_all(FILE* file) {
 		size_t size = (size_t) ftell(file);
 		rewind(file);
 		char* buf = malloc(size+1);
-		if (fread(buf, size, 1, file) < size) {
+			if (buf == NULL) {
+			return NULL;
+		}
+		if (fread(buf, size, 1, file) < 1) {
 			free(buf);
+			// TODO: better error handling
+			if (feof(file)) {
+				fputs("eof error\n", stderr);
+			} else if (ferror(file)) {
+				fputs("file i/o error\n", stderr);
+			}
+			errno = EIO; 
 			return NULL;
 		}
 		buf[size] = '\0';

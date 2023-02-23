@@ -52,8 +52,6 @@ struct optionslist* create_optionslist(void) {
 }
 void destroy_optionslist(struct optionslist* options) {
 	// types should point to argv, so no need to dealloc individual pointer
-	free(options->types);
-	free(options->modules);
 	// close all files
 	for (size_t i = 0; i < (options->ninputs); ++i) {
 		if (options->inputs != NULL && options->inputs[i] != NULL) fclose(options->inputs[i]);
@@ -67,6 +65,7 @@ void destroy_optionslist(struct optionslist* options) {
 	}
 	if (options->configfile != NULL) fclose(options->configfile);
 	// free individual arrays
+	free(options->types);
 	free(options->inputs);
 	free(options->inputbufs);
 	free(options->outputs);
@@ -117,7 +116,7 @@ int main(int argc, char* argv[]) {
 						return 1;
 					}
 					options->outputs = newoutputs;
-					options->outputs[(options->noutputs)-1] = fopen(optarg, "r");
+					options->outputs[(options->noutputs)-1] = fopen(optarg, "w+");
 					if (options->outputs[(options->noutputs)-1] == NULL) {
 						perror("opening output file failed");
 						destroy_optionslist(options);
@@ -142,12 +141,19 @@ int main(int argc, char* argv[]) {
 			// process input
 			++options->ninputs;
 			FILE** newinputs = (FILE**) realloc(options->inputs, (options->ninputs) * sizeof(FILE*));
+			char** newinputbufs = (char**) realloc(options->inputbufs, (options->ninputs) * sizeof(char*));
 			if (newinputs == NULL) {
 				perror("realloc inputs failed");
 				destroy_optionslist(options);
 				return 1;
 			}
+			if (newinputbufs == NULL) {
+				perror("realloc inputbufs failed");
+				destroy_optionslist(options);
+				return 1;
+			}
 			options->inputs = newinputs;
+			options->inputbufs = newinputbufs;
 			options->inputs[(options->ninputs)-1] = fopen(argv[optind], "r");
 			if (options->inputs[(options->ninputs)-1] == NULL) {
 				perror("opening input file failed");
@@ -167,12 +173,28 @@ int main(int argc, char* argv[]) {
 	if (options->noutputs == 0) {
 		options->noutputs = 1;
 		options->outputs = malloc(sizeof(FILE*));
+		if (options->outputs == NULL) {
+			perror("malloc for outputs failed");
+			destroy_optionslist(options);
+			return 1;
+		}
 		options->outputs[0] = stdout; // stdout
 	}
 
 	if (options->ninputs == 0) {
 		options->ninputs = 1;
 		options->inputs = malloc(sizeof(FILE*));
+		if (options->inputs == NULL) {
+			perror("malloc for inputs failed");
+			destroy_optionslist(options);
+			return 1;
+		}
+		options->inputbufs = malloc(sizeof(char*));
+		if (options->inputbufs == NULL) {
+			perror("malloc for inputbufs failed");
+			destroy_optionslist(options);
+			return 1; 
+		}
 		options->inputs[0] = stdin;
 	}
 	// Open config file
@@ -192,13 +214,13 @@ int main(int argc, char* argv[]) {
 	}
 	options->modules = get_modules(config);
 	// no need for config now
-	free(config);
+	free(config);	
 	if (options->modules == NULL) {
 		perror("failed to parse configuration file");
 		destroy_optionslist(options);
 		return 1;
 	}
-
+	
 	//  Read all input files
 	for (size_t i = 0; i < options->ninputs; ++i) {
 		options->inputbufs[i] = read_all(options->inputs[i]);
