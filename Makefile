@@ -5,9 +5,9 @@ CC := gcc
 CFLAGS := -Wall -Wextra -Wpedantic -Werror -Wshadow -Wformat=2 -Wconversion -Wunused-parameter -fsanitize=address,undefined
 LDFLAGS := -ldl
 
-# TODO: debug target because it's probably not a good idea to have address sanitizer on in production/release (or is it?)
+# TODO: debug target because it's probably not a good idea to have address sanitizer on in production
 
-.PHONY: all clean debug
+.PHONY: all clean
 all: bin/reshape $(module_libraries)
 
 bin/reshape: src/app/*.c
