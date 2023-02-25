@@ -1,5 +1,5 @@
-modules := 
-module_libraries := $(addsuffix .so,$(modules))
+modules := sum
+module_libraries := bin/modules/$(addsuffix .so,$(modules))
 
 CC := gcc
 CFLAGS := -Wall -Wextra -Wpedantic -Werror -Wshadow -Wformat=2 -Wconversion -Wunused-parameter -fsanitize=address,undefined -g
@@ -12,9 +12,9 @@ all: bin/reshape $(module_libraries)
 
 bin/reshape: src/app/*.c
 	$(CC) $(CFLAGS) $(LDFLAGS) -o bin/reshape src/app/*.c
-%.so: src/modules/$(basename $@)/*.c 
-	$(CC) $(CFLAGS) -c -fPIC -o $(basename $@).o src/modules/$(basename $@)/*.c
-	$(CC) -shared -o $@ bin/modules/$(basename $@).so
+bin/modules/%.so: src/modules/%/*.c 
+	$(CC) $(CFLAGS) -c -fPIC -o $(basename $@).o $^
+	$(CC) -shared -o $@ $(basename $@).o
 clean:
 	rm *.o
 

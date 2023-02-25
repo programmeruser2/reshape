@@ -25,6 +25,7 @@ struct optionslist {
 	size_t noutputs;
 
 	FILE* configfile;
+	char* config;
 	
 	char** modules;
 	void** modulehandles;
@@ -44,6 +45,7 @@ struct optionslist* create_optionslist(void) {
 	options->noutputs = 0;
 
 	options->configfile = NULL;
+	options->config = NULL;
 
 	options->modules = NULL;
 	options->modulehandles = NULL;
@@ -53,7 +55,9 @@ struct optionslist* create_optionslist(void) {
 void destroy_optionslist(struct optionslist* options) {
 	// types should point to argv, so no need to dealloc individual pointer
 	// close all files
+	//printf("ninputs = %zu\n", options->ninputs);
 	for (size_t i = 0; i < (options->ninputs); ++i) {
+		//printf("inputs = %p, inputs[i] = %p, inputbufs = %p, inputbufs[i] = %p\n", (void*)options->inputs, (void*)options->inputs[i], (void*)options->inputbufs, (void*)options->inputbufs[i]);
 		if (options->inputs != NULL && options->inputs[i] != NULL) fclose(options->inputs[i]);
 		if (options->inputbufs != NULL && options->inputbufs[i] != NULL) free(options->inputbufs[i]);
 	}
@@ -65,6 +69,7 @@ void destroy_optionslist(struct optionslist* options) {
 	}
 	if (options->configfile != NULL) fclose(options->configfile);
 	// free individual arrays
+	free(options->config);
 	free(options->types);
 	free(options->inputs);
 	free(options->inputbufs);
@@ -154,6 +159,8 @@ int main(int argc, char* argv[]) {
 			}
 			options->inputs = newinputs;
 			options->inputbufs = newinputbufs;
+			// Initialize to NULL to prevent uninitialized problems
+			options->inputbufs[options->ninputs-1] = NULL;
 			options->inputs[(options->ninputs)-1] = fopen(argv[optind], "r");
 			if (options->inputs[(options->ninputs)-1] == NULL) {
 				perror("opening input file failed");
@@ -195,6 +202,8 @@ int main(int argc, char* argv[]) {
 			destroy_optionslist(options);
 			return 1; 
 		}
+		// initialize
+		options->inputbufs[0] = NULL;
 		options->inputs[0] = stdin;
 	}
 	// Open config file
@@ -206,20 +215,21 @@ int main(int argc, char* argv[]) {
 	}
 	// Read and parse config
 	// TODO: allow config file specfication in enviroment variables
-	char* config = read_all(options->configfile);
-	if (config == NULL) {
+	options->config = read_all(options->configfile);
+	if (options->config == NULL) {
 		perror("failed to read configuration file");
 		destroy_optionslist(options);
 		return 1;
 	}
-	options->modules = get_modules(config);
-	// no need for config now
-	free(config);	
+	// printf("read config = %s\n", options->config);
+	options->modules = get_modules(options->config);
+	
 	if (options->modules == NULL) {
 		perror("failed to parse configuration file");
 		destroy_optionslist(options);
 		return 1;
 	}
+	// puts("done parsing\n");
 	
 	//  Read all input files
 	for (size_t i = 0; i < options->ninputs; ++i) {
@@ -240,17 +250,28 @@ int main(int argc, char* argv[]) {
 		destroy_optionslist(options);
 		return 1;
 	}
+	// Initialize, to prevent dlclose errors
+	for (size_t i = 0; i < options->ntypes; ++i) {
+		options->modulehandles[i] = NULL;
+	}
 	// First, find the modules we need
 	// Loop through inputted types
+	//printf("%zu\n", options->ntypes);
 	for (size_t i = 0; i < options->ntypes; ++i) {
 		// Search for library path in options->modules
 		// TODO: handle symbol conflicts better
 		// TODO: see https://stackoverflow.com/questions/22004131/is-there-symbol-conflict-when-loading-two-shared-libraries-with-a-same-symbol
+		// printf("i = %z\n", i);
 		size_t j = 0;
 		bool found = false;
+		//printf("searching i = %zu\n", i);
+		//printf("%p\n", options->modules[0]);
+		//if(options->modules[0]!=NULL) printf("%s",options->modules[0]);
 		while (options->modules[j] != NULL) {
-			if (options->modules[j] == options->types[i]) {
-				options->modulehandles[i] = dlopen(options->modules[j+1], RTLD_LAZY | RTLD_DEEPBIND);
+			//printf("searching j = %zu\n", j);
+			if (strcmp(options->modules[j], options->types[i]) == 0) {
+				// TODO: add back RTLD_DEEPBIND when address sanitizer is removed in production
+				options->modulehandles[i] = dlopen(options->modules[j+1], RTLD_LAZY /* | RTLD_DEEPBIND */ );
 				// RTLD_LAZY: we don't want to load more functions than needed
 				// RTLD_DEEPBIND: make sure that we are actually loading the conversion function from the library,
 				// and not some other library with a global symbol
@@ -275,14 +296,16 @@ int main(int argc, char* argv[]) {
 			destroy_optionslist(options);
 			return 1;
 		}
+		//puts("this will hopefully not be executed\n");
 	}
 	
 	// Now, start conversion!
 	// Go through every type
 	// Earlier types -> earlier in piping/composition
-	char** current_args = options->inputbufs;
+	char** current_args = options->inputbufs; // no need to terminate with NULL since we already know current_nargs
 	size_t current_nargs = options->ninputs;
 	// TODO: for stdin/stdout defaults, maybe "pad" with more stdin/stdout to make everything go to stdin/stdout?
+	bool isfirst = true;
 	for (size_t i = 0; i < options->ntypes; ++i) {
 		// Get reference of function
 		// Function prototype
@@ -308,10 +331,14 @@ int main(int argc, char* argv[]) {
 		// Free previous memory
 		// It's assumed that the strings are heap allocated. If it isn't the module can just malloc and then strcpy there.
 		// The list should be terminated by a NULL.
-		for (size_t j = 0; j < current_nargs; ++j) {
-			free(current_args[i]);		
+		if (!isfirst) {
+			for (size_t j = 0; j < current_nargs; ++j) {
+				free(current_args[j]);		
+			}
+			free(current_args);
+		} else {
+			isfirst = false;
 		}
-		free(current_args);
 		// Set new values
 		current_args = output;
 		current_nargs = 0;
@@ -331,6 +358,15 @@ int main(int argc, char* argv[]) {
 	// We are done!
 
 	// Cleanup
+	if (!isfirst) {
+		for (size_t j = 0; j < current_nargs; ++j) {
+			free(current_args[j]);		
+		}
+		free(current_args);
+	} else {
+		isfirst = false;
+	}
+
 	destroy_optionslist(options);
 	return 0;
 }

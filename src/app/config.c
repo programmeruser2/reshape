@@ -17,6 +17,7 @@ char** get_modules(char* config) {
 	char* token = strtok(config, delims);
 	size_t ntokens = 0;
 	while (token != NULL) {
+		//printf("%p %s[end]\n", token, token);
 		++ntokens;
 		char** newmodules = realloc(modules, (ntokens + 1) * sizeof(char*));
 		if (newmodules == NULL) {
@@ -25,8 +26,9 @@ char** get_modules(char* config) {
 		} else {
 			modules = newmodules;
 			modules[ntokens-1] = token;
+			modules[ntokens] = NULL;
 		}
-		token = strtok(config, delims);
+		token = strtok(NULL, delims);
 	}
 	if (ntokens % 2 != 0) {
 		errno = ELIBACC;
