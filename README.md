@@ -7,5 +7,5 @@ With `reshape`, conversion is done 100% on your local computer, unless some comp
 ## Why AGPLv3?
 If a network service is using this, the the users should know what the service is doing with this program so that they know about what the service is actually doing as there is a risk that this could be used to create more converter websites that do malicious actions with user-inputted data.
 
-## Build
+## Building
 Run `make` to build the binaries into `bin/`, including the modules. You will have to edit `/etc/reshape.conf` (or whatever configuration file you use) to point at the shared libraries for the modules.
