@@ -1,5 +1,5 @@
-modules := sum
-module_libraries := bin/modules/$(addsuffix .so,$(modules))
+modules := sum double
+module_libraries := $(addprefix bin/modules/,$(addsuffix .so,$(modules)))
 
 CC := gcc
 CFLAGS := -Wall -Wextra -Wpedantic -Werror -Wshadow -Wformat=2 -Wconversion -Wunused-parameter -fsanitize=address,undefined -g
